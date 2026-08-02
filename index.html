@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kanchit's Hub</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f6f3;
+    --card: #ffffff;
+    --text: #1a1a1a;
+    --text-secondary: #5f5e5a;
+    --border: #e4e2dc;
+    --accent: #185fa5;
+    --accent-bg: #e6f1fb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a;
+      --card: #212226;
+      --text: #eceae4;
+      --text-secondary: #a8a6a0;
+      --border: #33343a;
+      --accent: #85b7eb;
+      --accent-bg: #0c447c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 4rem 1.5rem 6rem;
+  }
+  h1 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem;
+  }
+  .sub {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin: 0 0 3rem;
+  }
+  .section-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin: 0 0 0.9rem;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 3rem;
+  }
+  .card {
+    display: block;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.1rem 1.3rem;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+  .card:not(.disabled):hover {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+  }
+  .card.disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+  .card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .card-title {
+    font-size: 1.02rem;
+    font-weight: 600;
+    margin: 0;
+  }
+  .badge {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 100px;
+    white-space: nowrap;
+  }
+  .badge.live {
+    background: var(--accent-bg);
+    color: var(--accent);
+  }
+  .badge.soon {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+  .card-desc {
+    font-size: 0.87rem;
+    color: var(--text-secondary);
+    margin: 0.35rem 0 0;
+  }
+  footer {
+    border-top: 1px solid var(--border);
+    padding-top: 1.2rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+  footer a { color: var(--text-secondary); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Kanchit's hub</h1>
+    <p class="sub">One place for everything — portfolio tracking, budget, and more.</p>
+
+    <p class="section-label">Finance</p>
+    <div class="grid">
+      <a class="card" href="https://docs.google.com/spreadsheets/d/19vb31pk7aqrgKWycox_6Ffv9R1Aycu60sAeuIKGTGf4/edit" target="_blank" rel="noopener">
+        <div class="card-top">
+          <p class="card-title">Portfolio tracker</p>
+          <span class="badge live">Live</span>
+        </div>
+        <p class="card-desc">Buy/sell log with auto average-cost, unrealized &amp; realized P&amp;L, live prices, and USD/CAD support.</p>
+      </a>
+      <div class="card disabled">
+        <div class="card-top">
+          <p class="card-title">Budget</p>
+          <span class="badge soon">Coming soon</span>
+        </div>
+        <p class="card-desc">Monthly income, spending, and savings tracker.</p>
+      </div>
+    </div>
+
+    <p class="section-label">Life</p>
+    <div class="grid">
+      <div class="card disabled">
+        <div class="card-top">
+          <p class="card-title">Vacation planner</p>
+          <span class="badge soon">Coming soon</span>
+        </div>
+        <p class="card-desc">Trip itineraries, budgets, and packing lists.</p>
+      </div>
+    </div>
+
+    <footer>
+      Built and maintained with Claude. Documents open in Google Sheets — access is controlled separately via each file's sharing settings.
+    </footer>
+  </div>
+</body>
+</html>
