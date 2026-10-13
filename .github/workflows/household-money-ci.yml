@@ -1,0 +1,131 @@
+name: Household Money CI
+
+on:
+  push:
+    paths: ["household-money/**", ".github/workflows/household-money-ci.yml"]
+  pull_request:
+    paths: ["household-money/**", ".github/workflows/household-money-ci.yml"]
+
+concurrency:
+  group: hm-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: household-money
+
+env:
+  NODE_VERSION: "22"
+  # CI-only throwaway values. Real secrets live only in Vercel env vars, never in the repo.
+  ENCRYPTION_KEY: "Y2ktb25seS1rZXktbm90LWEtc2VjcmV0LTMyYnl0ZXM="
+  APP_URL: "http://localhost:3100"
+  DEMO_MODE: "true"
+  DATABASE_URL: "postgresql://hm:hm@localhost:5432/household_money"
+  DIRECT_URL: "postgresql://hm:hm@localhost:5432/household_money"
+  TEST_DATABASE_URL: "postgresql://hm:hm@localhost:5432/household_money_test"
+  E2E_DATABASE_URL: "postgresql://hm:hm@localhost:5432/household_money_e2e"
+
+jobs:
+  quality:
+    name: Typecheck · Lint · Format · Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: household-money/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm test
+      - name: Dependency audit (production deps, high+)
+        run: npm audit --omit=dev --audit-level=high
+
+  integration:
+    name: Integration tests (Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: hm
+          POSTGRES_PASSWORD: hm
+          POSTGRES_DB: household_money_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hm" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: household-money/package-lock.json
+      - run: npm ci
+      - run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+          DIRECT_URL: ${{ env.TEST_DATABASE_URL }}
+      - run: npm run test:integration
+
+  e2e:
+    name: E2E (desktop Chrome + iPhone WebKit) · axe · Lighthouse
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: hm
+          POSTGRES_PASSWORD: hm
+          POSTGRES_DB: household_money_e2e
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hm" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: household-money/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium webkit
+      - name: Playwright
+        run: npm run test:e2e
+        env:
+          CI: "true"
+      - name: Lighthouse (public pages, mobile) >= 90
+        run: |
+          npx next start -p 3100 &
+          npx wait-on -t 60000 http://localhost:3100/api/health
+          CHROME_PATH=$(node -e "console.log(require('playwright-core').chromium.executablePath())") npm run lighthouse -- http://localhost:3100
+        env:
+          DATABASE_URL: ${{ env.E2E_DATABASE_URL }}
+          DIRECT_URL: ${{ env.E2E_DATABASE_URL }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: household-money/playwright-report
+          retention-days: 7
+
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: household-money/package-lock.json
+      - run: npm ci
+      - run: npm run build

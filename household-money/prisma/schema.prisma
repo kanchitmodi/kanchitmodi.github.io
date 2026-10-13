@@ -1,0 +1,320 @@
+// Household Money — data model.
+// Money is stored as integer cents (BigInt-free Int is enough for household amounts < $21M).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------- Identity & household ----------
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  passwordHash  String
+  /// TOTP secret, AES-256-GCM encrypted with ENCRYPTION_KEY
+  totpSecretEnc String?
+  totpEnabled   Boolean   @default(false)
+  avatarColor   String    @default("#2563eb")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  membership    Membership?
+  sessions      Session[]
+  passkeys      Passkey[]
+  ownedAccounts Account[]            @relation("AccountOwner")
+  spentTxns     Transaction[]        @relation("Spender")
+  comments      TransactionComment[]
+  auditLogs     AuditLog[]
+  invitesSent   Invite[]
+}
+
+model Passkey {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialId String    @unique
+  publicKey    Bytes
+  counter      Int       @default(0)
+  transports   String[]
+  deviceName   String    @default("Passkey")
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  /// SHA-256 of the cookie token; the raw token is never stored
+  tokenHash    String   @unique
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// false until the second factor (TOTP) has been verified
+  mfaPassed    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+  /// Last user activity; sessions idle > 5 min are locked
+  lastActiveAt DateTime @default(now())
+  /// Pending WebAuthn challenge for this session (registration or unlock)
+  challenge    String?
+  userAgent    String?
+
+  @@index([userId])
+}
+
+/// Short-lived, cookie-bound WebAuthn login challenge (before a session exists)
+model AuthChallenge {
+  id        String   @id @default(cuid())
+  challenge String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  /// "email:<addr>" or "ip:<addr>"
+  key       String
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+}
+
+enum Role {
+  OWNER
+  MEMBER
+}
+
+model Household {
+  id            String   @id @default(cuid())
+  name          String
+  baseCurrency  String   @default("CAD")
+  /// Share of joint accounts attributed to the owner (0–100); the rest to the member
+  jointSplitPct Int      @default(50)
+  isDemo        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  members     Membership[]
+  invites     Invite[]
+  accounts    Account[]
+  categories  Category[]
+  txns        Transaction[]
+  auditLogs   AuditLog[]
+  setupSteps  SetupStep[]
+}
+
+model Membership {
+  id          String    @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        Role
+  joinedAt    DateTime  @default(now())
+
+  @@index([householdId])
+}
+
+model Invite {
+  id          String    @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  email       String
+  tokenHash   String    @unique
+  invitedById String
+  invitedBy   User      @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([householdId])
+}
+
+// ---------- Accounts & transactions ----------
+
+enum AccountType {
+  CHEQUING
+  SAVINGS
+  CREDIT_CARD
+  INVESTMENT
+  LOAN
+  OTHER
+}
+
+enum OwnerType {
+  INDIVIDUAL
+  JOINT
+}
+
+enum Visibility {
+  SHARED
+  PRIVATE
+}
+
+/// What the other member sees for a PRIVATE account
+enum PrivateMode {
+  BALANCE_ONLY
+  HIDDEN
+}
+
+enum ConnectionMode {
+  LIVE
+  EMAIL
+  MANUAL
+}
+
+enum SyncTier {
+  ACTIVE
+  LOW
+}
+
+model Account {
+  id               String         @id @default(cuid())
+  householdId      String
+  household        Household      @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  /// Key from config/connections.ts (null for ad-hoc accounts)
+  configKey        String?
+  name             String
+  institution      String
+  type             AccountType
+  /// e.g. TFSA, RRSP, FHSA, RESP, NON_REG, CASH
+  subtype          String?
+  /// Last 4 digits only — never full account numbers
+  mask             String?
+  currency         String         @default("CAD")
+  ownerType        OwnerType      @default(INDIVIDUAL)
+  ownerUserId      String?
+  owner            User?          @relation("AccountOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  visibility       Visibility     @default(SHARED)
+  privateMode      PrivateMode    @default(BALANCE_ONLY)
+  connectionMode   ConnectionMode @default(MANUAL)
+  syncTier         SyncTier       @default(ACTIVE)
+  /// Balance in cents (credit cards: amount owed is negative)
+  balanceCents     Int            @default(0)
+  balanceUpdatedAt DateTime?
+  lastSyncedAt     DateTime?
+  archived         Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  txns Transaction[]
+
+  @@unique([householdId, institution, mask, type])
+  @@index([householdId])
+}
+
+enum CategoryKind {
+  EXPENSE
+  INCOME
+  TRANSFER
+}
+
+model Category {
+  id          String       @id @default(cuid())
+  householdId String
+  household   Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  name        String
+  kind        CategoryKind @default(EXPENSE)
+  color       String
+  sortOrder   Int          @default(0)
+
+  txns Transaction[]
+
+  @@unique([householdId, name])
+}
+
+enum TxnSource {
+  DEMO
+  CSV
+  PDF
+  PLAID
+  EMAIL
+  SNAPTRADE
+  MANUAL
+}
+
+model Transaction {
+  id            String    @id @default(cuid())
+  householdId   String
+  household     Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  accountId     String
+  account       Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  date          DateTime  @db.Date
+  /// Signed cents in account currency: negative = money out, positive = money in
+  amountCents   Int
+  currency      String    @default("CAD")
+  merchantRaw   String
+  merchant      String
+  categoryId    String?
+  category      Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  /// Whose card / who spent it
+  spenderUserId String?
+  spender       User?     @relation("Spender", fields: [spenderUserId], references: [id], onDelete: SetNull)
+  notes         String?
+  isTransfer    Boolean   @default(false)
+  pending       Boolean   @default(false)
+  source        TxnSource
+  /// Provider-side id (Plaid txn id, Gmail message id, CSV row hash) for dedupe
+  externalId    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  comments TransactionComment[]
+
+  @@unique([accountId, externalId])
+  @@index([householdId, date])
+  @@index([accountId, date])
+}
+
+model TransactionComment {
+  id            String      @id @default(cuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  body          String
+  createdAt     DateTime    @default(now())
+
+  @@index([transactionId])
+}
+
+// ---------- Audit & setup ----------
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  actorUserId String?
+  actor       User?     @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  /// e.g. auth.login, account.visibility, txn.edit, household.invite
+  action      String
+  entityType  String?
+  entityId    String?
+  details     Json?
+  createdAt   DateTime  @default(now())
+
+  @@index([householdId, createdAt])
+}
+
+model SetupStep {
+  id          String    @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  stepKey     String
+  /// Checked item keys within the step
+  checked     String[]
+  lastTestAt  DateTime?
+  lastTestOk  Boolean?
+  lastTestMsg String?
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([householdId, stepKey])
+}
