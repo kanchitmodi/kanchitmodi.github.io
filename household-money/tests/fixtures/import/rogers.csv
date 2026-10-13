@@ -1,0 +1,6 @@
+Date,Posted Date,Reference Number,Activity Type,Activity Status,Card Number,Merchant Category Description,Merchant Name,Merchant City,Merchant State or Province,Merchant Country Code,Merchant Postal Code,Amount,Rewards,Name on Card
+2026-09-06,2026-09-07,"85401",TRANS,APPROVED,'************4422,Grocery Stores,COSTCO WHOLESALE W535,TORONTO,ON,CAN,M4B,$198.44,$3.97,KANCHIT MODI
+2026-09-09,2026-09-10,"85402",TRANS,APPROVED,'************4422,Restaurants,PAI NORTHERN THAI,TORONTO,ON,CAN,M5V,$64.20,$1.28,KANCHIT MODI
+2026-09-12,2026-09-12,"85403",TRANS,DECLINED,'************4422,Restaurants,SKETCHY MERCHANT,TORONTO,ON,CAN,M5V,$999.00,$0.00,KANCHIT MODI
+2026-09-14,2026-09-14,"85404",PAYMENT,APPROVED,'************4422,,PAYMENT RECEIVED,,,,,-$262.64,$0.00,KANCHIT MODI
+2026-09-18,2026-09-19,"85405",TRANS,APPROVED,'************4422,Airlines,AIR CANADA,MONTREAL,QC,CAN,H4Y,"$1,240.00",$37.20,KANCHIT MODI

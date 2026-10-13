@@ -1,0 +1,5 @@
+Transaction Date,Settlement Date,Action,Symbol,Description,Quantity,Price,Gross Amount,Commission,Net Amount,Currency,Account #,Activity Type,Account Type
+2026-09-02 12:00:00 AM,2026-09-02 12:00:00 AM,CON,,CONTRIBUTION,0,0,0,0,1000.00,CAD,51234567,Deposits,Individual RRSP
+2026-09-03 12:00:00 AM,2026-09-04 12:00:00 AM,Buy,XEQT.TO,ISHARES CORE EQUITY ETF,30,31.50,-945.00,0,-945.00,CAD,51234567,Trades,Individual RRSP
+2026-09-29 12:00:00 AM,2026-09-29 12:00:00 AM,DIV,XEQT.TO,ISHARES CORE EQUITY ETF DIST ON 30 SHS,0,0,0,0,8.37,CAD,51234567,Dividends,Individual RRSP
+2026-09-30 12:00:00 AM,2026-09-30 12:00:00 AM,FCH,,DATA FEE,0,0,0,0,-9.95,CAD,51234567,Fees and rebates,Individual RRSP

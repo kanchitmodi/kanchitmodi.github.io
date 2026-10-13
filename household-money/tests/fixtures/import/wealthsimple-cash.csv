@@ -1,0 +1,6 @@
+date,transaction,description,amount,balance
+2026-09-01,DEP,Direct deposit from ACME CORP,3200.00,9823.10
+2026-09-02,SPEND,Starbucks Toronto,-6.45,9816.65
+2026-09-05,TRFOUT,Transfer to Wealthsimple Credit Card,-418.22,9398.43
+2026-09-16,TRFOUT,Transfer to TFSA,-500.00,8898.43
+2026-09-30,INT,Interest earned,12.34,8910.77

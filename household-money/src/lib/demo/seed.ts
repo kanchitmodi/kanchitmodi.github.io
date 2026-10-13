@@ -3,6 +3,7 @@ import { hashPassword } from "../password";
 import { encrypt } from "../crypto";
 import { createHouseholdFor } from "../household";
 import { generateDemo, type DemoPerson } from "./generator";
+import { normalizeMerchant } from "../import/normalize";
 
 /** Demo-only credentials. Never used outside DEMO_MODE. */
 export const DEMO_PASSWORD = "demo-password-123";
@@ -94,6 +95,9 @@ export async function seedDemoHousehold(
       amountCents: t.amountCents,
       merchantRaw: t.merchant.toUpperCase(),
       merchant: t.merchant,
+      merchantNorm: normalizeMerchant(t.merchant),
+      categorySource: "DEMO" as const,
+      categoryConfidence: 1,
       categoryId: catId.get(t.category) ?? null,
       spenderUserId: users[t.spender].id,
       isTransfer: t.isTransfer,

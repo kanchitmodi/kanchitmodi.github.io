@@ -183,7 +183,7 @@ app.
 | `RESEND_API_KEY`, `EMAIL_FROM`                  | optional    | Invite and report emails. Without them, emails are logged and the invite link is shown in the app |
 | `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV`  | Stage 5     |                                                                                                   |
 | `SNAPTRADE_CLIENT_ID`, `SNAPTRADE_CONSUMER_KEY` | Stage 6     |                                                                                                   |
-| `ANTHROPIC_API_KEY`, `AI_MONTHLY_CAP_CAD`       | Stage 10    |                                                                                                   |
+| `ANTHROPIC_API_KEY`, `AI_MONTHLY_CAP_USD`       | Stage 10    |                                                                                                   |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`      | Stage 4     |                                                                                                   |
 | `TEST_DATABASE_URL`, `E2E_DATABASE_URL`         | tests       | Disposable DBs. The E2E DB name must end in `_e2e` or `_test`                                     |
 
@@ -203,7 +203,7 @@ bank's help centre for "download transactions".
 | Questrade    | Reports › Account activity › **Export to Excel/CSV**                              | CSV     |
 | IBKR         | Performance & Reports › Statements or Flex Query › CSV                            | CSV     |
 
-Stage 2 adds auto-detecting importers and per-institution test fixtures for each of these.
+Import them at **Import** in the app. The format is detected automatically; if a bank changed its export and detection fails, the app falls back to guessing columns from the header row. Send a redacted sample and the parser can be updated.
 
 ## Running locally
 

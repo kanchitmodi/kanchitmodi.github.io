@@ -4,6 +4,8 @@ import { listAccounts, type AccountView } from "@/lib/data";
 import { formatCents } from "@/lib/money";
 import { PageHeader, StatusBadge } from "@/components/ui";
 import { VisibilityControl } from "./visibility-control";
+import { AddAccount, BalanceEditor } from "./accounts-client";
+import { CONNECTIONS } from "@config/connections";
 
 export const metadata = { title: "Accounts" };
 
@@ -35,6 +37,12 @@ export default async function AccountsPage() {
         title="Accounts"
         subtitle="Each person connects their own accounts. Joint accounts appear once."
       />
+      <AddAccount institutions={[...new Set(CONNECTIONS.map((c) => c.institution))]} />
+      {accounts.length === 0 && (
+        <p className="card p-4 text-sm text-text-2">
+          No accounts yet. Add one here, or create it while importing a CSV.
+        </p>
+      )}
       <div className="space-y-6">
         {groups.map((g) => (
           <section key={g.key} aria-labelledby={`g-${g.key}`}>
@@ -74,8 +82,18 @@ export default async function AccountsPage() {
                       }
                     />
                   )}
-                  <div className="w-28 text-right font-semibold tabular-nums">
-                    {formatCents(a.balanceCents)}
+                  <div className="w-32 text-right">
+                    <div className="font-semibold tabular-nums">
+                      {formatCents(a.balanceCents, { currency: a.currency })}
+                    </div>
+                    {a.connectionMode === "MANUAL" &&
+                      (a.ownerType === "JOINT" || a.ownerUserId === viewer.userId) && (
+                        <BalanceEditor
+                          accountId={a.id}
+                          balanceCents={a.balanceCents}
+                          name={a.name}
+                        />
+                      )}
                   </div>
                 </li>
               ))}

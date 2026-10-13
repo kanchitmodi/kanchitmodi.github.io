@@ -1,0 +1,6 @@
+transaction_date,post_date,type,details,amount,currency
+2026-09-02,2026-09-03,Purchase,NETFLIX.COM,20.99,CAD
+2026-09-03,2026-09-04,Purchase,UBER EATS TORONTO,34.12,CAD
+2026-09-05,2026-09-05,Payment,Payment received,418.22,CAD
+2026-09-07,2026-09-08,Refund,UBER EATS TORONTO,8.50,CAD
+2026-09-12,2026-09-13,Purchase,APPLE.COM/BILL,3.99,CAD

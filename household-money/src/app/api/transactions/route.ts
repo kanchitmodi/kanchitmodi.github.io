@@ -14,9 +14,12 @@ export const GET = apiHandler(async (req: Request) => {
   const txns = await listTransactions(viewer, scope, {
     q: p.get("q")?.slice(0, 100) || undefined,
     accountId: p.get("accountId") ?? undefined,
+    categoryId: p.get("categoryId") ?? undefined,
+    uncategorized: p.get("uncategorized") === "1",
+    review: p.get("review") === "1",
     from: from && DATE.test(from) ? from : undefined,
     to: to && DATE.test(to) ? to : undefined,
-    limit: Number(p.get("limit")) || 100,
+    limit: Math.min(Number(p.get("limit")) || 100, 500),
     cursor: p.get("cursor") ?? undefined,
   });
   return NextResponse.json({ transactions: txns });

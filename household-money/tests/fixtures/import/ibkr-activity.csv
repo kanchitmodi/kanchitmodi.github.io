@@ -1,0 +1,14 @@
+Statement,Header,Field Name,Field Value
+Statement,Data,Title,Activity Statement
+Statement,Data,Period,"September 1, 2026 - September 30, 2026"
+Account Information,Header,Field Name,Field Value
+Account Information,Data,Account,U9876543
+Deposits & Withdrawals,Header,Currency,Settle Date,Description,Amount
+Deposits & Withdrawals,Data,CAD,2026-09-02,Electronic Fund Transfer,2000
+Deposits & Withdrawals,Data,Total,,,2000
+Dividends,Header,Currency,Date,Description,Amount
+Dividends,Data,USD,2026-09-25,VTI(US9229087690) Cash Dividend USD 0.9 per Share (Ordinary Dividend),27.00
+Dividends,Data,Total,,,27.00
+Withholding Tax,Header,Currency,Date,Description,Amount,Code
+Withholding Tax,Data,USD,2026-09-25,VTI(US9229087690) Cash Dividend USD 0.9 per Share - US Tax,-4.05,
+Fees,Header,Subtitle,Currency,Date,Description,Amount

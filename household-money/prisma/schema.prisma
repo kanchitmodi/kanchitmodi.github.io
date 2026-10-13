@@ -14,16 +14,16 @@ datasource db {
 // ---------- Identity & household ----------
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
+  id            String   @id @default(cuid())
+  email         String   @unique
   name          String
   passwordHash  String
   /// TOTP secret, AES-256-GCM encrypted with ENCRYPTION_KEY
   totpSecretEnc String?
-  totpEnabled   Boolean   @default(false)
-  avatarColor   String    @default("#2563eb")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  totpEnabled   Boolean  @default(false)
+  avatarColor   String   @default("#2563eb")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   membership    Membership?
   sessions      Session[]
@@ -33,6 +33,9 @@ model User {
   comments      TransactionComment[]
   auditLogs     AuditLog[]
   invitesSent   Invite[]
+  txnEvents     TransactionEvent[]
+  rules         CategoryRule[]
+  imports       ImportBatch[]
 }
 
 model Passkey {
@@ -101,13 +104,17 @@ model Household {
   isDemo        Boolean  @default(false)
   createdAt     DateTime @default(now())
 
-  members     Membership[]
-  invites     Invite[]
-  accounts    Account[]
-  categories  Category[]
-  txns        Transaction[]
-  auditLogs   AuditLog[]
-  setupSteps  SetupStep[]
+  members    Membership[]
+  invites    Invite[]
+  accounts   Account[]
+  categories Category[]
+  txns       Transaction[]
+  auditLogs  AuditLog[]
+  setupSteps SetupStep[]
+  rules      CategoryRule[]
+  imports    ImportBatch[]
+  aiUsage    AiUsage[]
+  llmCache   MerchantCategoryCache[]
 }
 
 model Membership {
@@ -226,7 +233,10 @@ model Category {
   color       String
   sortOrder   Int          @default(0)
 
-  txns Transaction[]
+  txns     Transaction[]
+  splits   TransactionSplit[]
+  rules    CategoryRule[]
+  llmCache MerchantCategoryCache[]
 
   @@unique([householdId, name])
 }
@@ -242,36 +252,177 @@ enum TxnSource {
 }
 
 model Transaction {
-  id            String    @id @default(cuid())
-  householdId   String
-  household     Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  accountId     String
-  account       Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  date          DateTime  @db.Date
+  id                 String         @id @default(cuid())
+  householdId        String
+  household          Household      @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  accountId          String
+  account            Account        @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  date               DateTime       @db.Date
   /// Signed cents in account currency: negative = money out, positive = money in
-  amountCents   Int
-  currency      String    @default("CAD")
-  merchantRaw   String
-  merchant      String
-  categoryId    String?
-  category      Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  amountCents        Int
+  currency           String         @default("CAD")
+  merchantRaw        String
+  merchant           String
+  categoryId         String?
+  category           Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   /// Whose card / who spent it
-  spenderUserId String?
-  spender       User?     @relation("Spender", fields: [spenderUserId], references: [id], onDelete: SetNull)
-  notes         String?
-  isTransfer    Boolean   @default(false)
-  pending       Boolean   @default(false)
-  source        TxnSource
+  spenderUserId      String?
+  spender            User?          @relation("Spender", fields: [spenderUserId], references: [id], onDelete: SetNull)
+  notes              String?
+  isTransfer         Boolean        @default(false)
+  pending            Boolean        @default(false)
+  source             TxnSource
   /// Provider-side id (Plaid txn id, Gmail message id, CSV row hash) for dedupe
-  externalId    String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  externalId         String?
+  /// Normalized merchant (uppercase, store numbers/cities stripped) — dedupe + rules key
+  merchantNorm       String         @default("")
+  categorySource     CategorySource @default(NONE)
+  /// 0..1; < 0.7 goes to the review queue
+  categoryConfidence Float?
+  needsReview        Boolean        @default(false)
+  /// Both legs of a detected transfer/card payment share this id
+  transferPairId     String?
+  importBatchId      String?
+  importBatch        ImportBatch?   @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
   comments TransactionComment[]
+  splits   TransactionSplit[]
+  events   TransactionEvent[]
 
   @@unique([accountId, externalId])
   @@index([householdId, date])
   @@index([accountId, date])
+  @@index([accountId, date, amountCents, merchantNorm])
+  @@index([householdId, merchantNorm])
+}
+
+enum CategorySource {
+  NONE
+  DEMO
+  IMPORT
+  RULE
+  USER
+  LLM
+}
+
+model TransactionSplit {
+  id            String      @id @default(cuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  categoryId    String?
+  category      Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  /// Signed cents; splits sum exactly to the transaction amount
+  amountCents   Int
+  note          String?
+
+  @@index([transactionId])
+}
+
+/// Field-level edit history ("who changed what"), shown on the transaction.
+model TransactionEvent {
+  id            String      @id @default(cuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// category | notes | splits | transfer | comment
+  field         String
+  fromValue     String?
+  toValue       String?
+  createdAt     DateTime    @default(now())
+
+  @@index([transactionId])
+}
+
+enum RuleMatch {
+  EXACT
+  CONTAINS
+}
+
+/// Categorization rule. USER rules come from corrections. A rule learned from a PRIVATE account's
+/// transaction is private: only listed for and applied to its creator's own accounts.
+model CategoryRule {
+  id          String    @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  /// Normalized merchant (EXACT) or substring (CONTAINS)
+  pattern     String
+  match       RuleMatch @default(EXACT)
+  categoryId  String
+  category    Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdById String?
+  createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  isPrivate   Boolean   @default(false)
+  hits        Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([householdId, pattern, match, createdById])
+  @@index([householdId])
+}
+
+enum ImportStatus {
+  PREVIEW
+  COMMITTED
+  DISCARDED
+}
+
+model ImportBatch {
+  id             String       @id @default(cuid())
+  householdId    String
+  household      Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId      String?
+  /// Detected format key, e.g. "td", "rogers", "pdf-generic"
+  format         String
+  filename       String
+  status         ImportStatus @default(PREVIEW)
+  /// Parsed rows (preview); cleared after commit/discard. The raw file is never stored.
+  rows           Json?
+  rowCount       Int          @default(0)
+  importedCount  Int          @default(0)
+  duplicateCount Int          @default(0)
+  dateFrom       DateTime?    @db.Date
+  dateTo         DateTime?    @db.Date
+  createdAt      DateTime     @default(now())
+  committedAt    DateTime?
+
+  txns Transaction[]
+
+  @@index([householdId, createdAt])
+}
+
+/// Per-call Claude usage for cost tracking and the monthly cap.
+model AiUsage {
+  id           String    @id @default(cuid())
+  householdId  String
+  household    Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  feature      String
+  model        String
+  inputTokens  Int
+  outputTokens Int
+  /// USD micro-dollars (1e-6) to avoid rounding small calls to zero
+  costMicros   Int
+  createdAt    DateTime  @default(now())
+
+  @@index([householdId, createdAt])
+}
+
+/// Household-level cache of LLM merchant -> category guesses (avoids paying twice).
+model MerchantCategoryCache {
+  id           String    @id @default(cuid())
+  householdId  String
+  household    Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  merchantNorm String
+  categoryId   String
+  category     Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  confidence   Float
+  createdAt    DateTime  @default(now())
+
+  @@unique([householdId, merchantNorm])
 }
 
 model TransactionComment {

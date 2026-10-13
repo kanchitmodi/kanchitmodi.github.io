@@ -1,4 +1,5 @@
 import type { AccountStatus } from "@/lib/account-status";
+import Link from "next/link";
 import { formatCents } from "@/lib/money";
 import { Avatar } from "./avatar";
 import type { TxnView } from "@/lib/data";
@@ -75,32 +76,54 @@ export function Money({ cents, className = "" }: { cents: number; className?: st
 
 export function TxnRow({ t }: { t: TxnView }) {
   return (
-    <li className="flex min-h-[56px] items-center gap-3 px-4 py-2" data-testid="txn-row">
-      {t.spender ? (
-        <Avatar name={t.spender.name} color={t.spender.avatarColor} />
-      ) : (
-        <span className="w-7" />
-      )}
-      <div className="min-w-0 flex-1">
-        <div className="truncate font-medium">{t.merchant}</div>
-        <div className="truncate text-xs text-text-3">
-          {t.date} · {t.account.name}
-          {t.spender ? ` · ${t.spender.name}` : ""}
-        </div>
-      </div>
-      <div className="text-right">
-        <Money cents={t.amountCents} className="font-semibold" />
-        {t.category && (
-          <div className="flex items-center justify-end gap-1 text-xs text-text-3">
-            <span
-              aria-hidden="true"
-              className="inline-block h-2 w-2 rounded-full"
-              style={{ backgroundColor: t.category.color }}
-            />
-            {t.category.name}
-          </div>
+    <li data-testid="txn-row">
+      <Link
+        href={`/transactions/${t.id}`}
+        className="flex min-h-[56px] items-center gap-3 px-4 py-2 hover:bg-surface-2"
+      >
+        {t.spender ? (
+          <Avatar name={t.spender.name} color={t.spender.avatarColor} />
+        ) : (
+          <span className="w-7" />
         )}
-      </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-medium">
+            {t.merchant}
+            {t.needsReview && (
+              <span
+                className="ml-2 rounded border border-border px-1 text-[11px] font-semibold text-warn"
+                title="Needs review"
+              >
+                ▲ Review
+              </span>
+            )}
+          </div>
+          <div className="truncate text-xs text-text-3">
+            {t.date} · {t.account.name}
+            {t.spender ? ` · ${t.spender.name}` : ""}
+            {t.commentCount ? ` · 💬 ${t.commentCount}` : ""}
+          </div>
+        </div>
+        <div className="text-right">
+          <Money cents={t.amountCents} className="font-semibold" />
+          <div className="flex items-center justify-end gap-1 text-xs text-text-3">
+            {t.splits.length ? (
+              <span>Split · {t.splits.length} parts</span>
+            ) : t.category ? (
+              <>
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-2 w-2 rounded-full"
+                  style={{ backgroundColor: t.category.color }}
+                />
+                {t.category.name}
+              </>
+            ) : (
+              <span>Uncategorized</span>
+            )}
+          </div>
+        </div>
+      </Link>
     </li>
   );
 }

@@ -60,8 +60,13 @@ test("no serious accessibility violations (axe), light and dark", async ({ page 
     await page.goto(path);
     await check(path);
   }
+  // A transaction detail page
+  await page.goto("/transactions?q=Spotify");
+  await page.getByTestId("txn-row").first().click();
+  await page.waitForURL(/\/transactions\/[a-z0-9]+$/);
+  await check("/transactions/[id]");
   await page.evaluate(() => localStorage.setItem("hm_theme", "dark"));
-  for (const path of ["/", "/accounts", "/settings/setup"]) {
+  for (const path of ["/", "/accounts", "/settings/setup", "/import"]) {
     await page.goto(path);
     await expect(page.locator("html")).toHaveClass(/dark/);
     await check(`${path} (dark)`);

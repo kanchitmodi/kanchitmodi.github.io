@@ -16,6 +16,7 @@ import {
   netWorth,
   todayInToronto,
   type CashFlow,
+  type FlowTxn,
   type NetWorth,
 } from "./finance";
 
@@ -156,11 +157,23 @@ export interface TxnView {
   } | null;
   account: { id: string; name: string; institution: string };
   spender: { id: string; name: string; avatarColor: string } | null;
+  categorySource: string;
+  needsReview: boolean;
+  splits: {
+    amountCents: number;
+    category: { id: string; name: string; kind: "EXPENSE" | "INCOME" | "TRANSFER" } | null;
+  }[];
+  commentCount: number;
 }
 
 export interface TxnQuery {
   q?: string;
   accountId?: string;
+  categoryId?: string;
+  /** No category (and not a transfer) */
+  uncategorized?: boolean;
+  /** Low-confidence or uncategorized: the review queue */
+  review?: boolean;
   from?: string;
   to?: string;
   limit?: number;
@@ -178,36 +191,56 @@ export async function listTransactions(
   if (query.accountId) ids = ids.filter((id) => id === query.accountId);
   if (ids.length === 0) return [];
 
+  // Every condition goes into AND so no filter can overwrite another (e.g. two ORs).
+  const and: Prisma.TransactionWhereInput[] = [];
+  if (scope.kind === "person") {
+    and.push({
+      OR: [
+        { spenderUserId: scope.userId },
+        {
+          spenderUserId: null,
+          account: { OR: [{ ownerType: "JOINT" }, { ownerUserId: scope.userId }] },
+        },
+      ],
+    });
+  }
+  if (query.q) {
+    and.push({
+      OR: [
+        { merchant: { contains: query.q, mode: "insensitive" } },
+        { merchantRaw: { contains: query.q, mode: "insensitive" } },
+        { notes: { contains: query.q, mode: "insensitive" } },
+      ],
+    });
+  }
+  if (query.categoryId) {
+    and.push({
+      OR: [
+        { categoryId: query.categoryId },
+        { splits: { some: { categoryId: query.categoryId } } },
+      ],
+    });
+  }
+  if (query.uncategorized) and.push({ categoryId: null, isTransfer: false });
+  if (query.review) and.push({ needsReview: true });
+  if (query.from) and.push({ date: { gte: new Date(`${query.from}T00:00:00Z`) } });
+  if (query.to) and.push({ date: { lte: new Date(`${query.to}T00:00:00Z`) } });
   const where: Prisma.TransactionWhereInput = {
     householdId: viewer.householdId,
     accountId: { in: ids },
-    ...(scope.kind === "person"
-      ? {
-          OR: [
-            { spenderUserId: scope.userId },
-            {
-              spenderUserId: null,
-              account: { OR: [{ ownerType: "JOINT" }, { ownerUserId: scope.userId }] },
-            },
-          ],
-        }
-      : {}),
-    ...(query.q ? { merchant: { contains: query.q, mode: "insensitive" as const } } : {}),
-    ...(query.from || query.to
-      ? {
-          date: {
-            ...(query.from ? { gte: new Date(`${query.from}T00:00:00Z`) } : {}),
-            ...(query.to ? { lte: new Date(`${query.to}T00:00:00Z`) } : {}),
-          },
-        }
-      : {}),
+    AND: and,
   };
 
   const rows = await db.transaction.findMany({
     where,
-    include: { category: true, spender: true },
+    include: {
+      category: true,
+      spender: true,
+      splits: { include: { category: true } },
+      _count: { select: { comments: true } },
+    },
     orderBy: [{ date: "desc" }, { id: "desc" }],
-    take: Math.min(query.limit ?? 100, 500),
+    take: Math.min(query.limit ?? 100, 5000),
     ...(query.cursor ? { skip: 1, cursor: { id: query.cursor } } : {}),
   });
 
@@ -240,8 +273,40 @@ export async function listTransactions(
         spender: t.spender
           ? { id: t.spender.id, name: t.spender.name, avatarColor: t.spender.avatarColor }
           : null,
+        categorySource: t.categorySource,
+        needsReview: t.needsReview,
+        splits: t.splits.map((sp) => ({
+          amountCents: sp.amountCents,
+          category: sp.category
+            ? { id: sp.category.id, name: sp.category.name, kind: sp.category.kind }
+            : null,
+        })),
+        commentCount: t._count.comments,
       };
     });
+}
+
+/** Category-level flows (splits expanded) for summaries and reports. */
+export function toFlows(txns: TxnView[]): FlowTxn[] {
+  return txns.flatMap((t) =>
+    t.splits.length
+      ? t.splits.map((sp) => ({
+          date: t.date,
+          amountCents: sp.amountCents,
+          isTransfer: t.isTransfer,
+          categoryKind: sp.category?.kind ?? null,
+          categoryName: sp.category?.name ?? null,
+        }))
+      : [
+          {
+            date: t.date,
+            amountCents: t.amountCents,
+            isTransfer: t.isTransfer,
+            categoryKind: t.category?.kind ?? null,
+            categoryName: t.category?.name ?? null,
+          },
+        ],
+  );
 }
 
 export interface HomeSummary {
@@ -258,7 +323,7 @@ export async function homeSummary(viewer: Viewer, scope: Scope): Promise<HomeSum
     db.membership.findFirst({ where: { householdId: viewer.householdId, role: "OWNER" } }),
     db.household.findUniqueOrThrow({ where: { id: viewer.householdId } }),
   ]);
-  const txns = await listTransactions(viewer, scope, { from, to, limit: 500 });
+  const txns = await listTransactions(viewer, scope, { from, to, limit: 5000 });
   return {
     netWorth: netWorth(accounts, scope, {
       ownerUserId: owner?.userId ?? viewer.userId,
@@ -267,16 +332,7 @@ export async function homeSummary(viewer: Viewer, scope: Scope): Promise<HomeSum
     month: {
       from,
       to,
-      ...cashFlow(
-        txns.map((t) => ({
-          date: t.date,
-          amountCents: t.amountCents,
-          isTransfer: t.isTransfer,
-          categoryKind: t.category?.kind ?? null,
-        })),
-        from,
-        to,
-      ),
+      ...cashFlow(toFlows(txns), from, to),
     },
     accountCount: accounts.length,
   };

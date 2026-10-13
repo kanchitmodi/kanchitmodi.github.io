@@ -11,7 +11,7 @@ responsive website and as an installable iPhone app (PWA).
 | Stage | Scope                                                                                                           | Status                |
 | ----- | --------------------------------------------------------------------------------------------------------------- | --------------------- |
 | 1     | App shell, PWA, auth (password + TOTP + passkeys, auto-lock), household & invites, privacy model, demo data, CI | ✅ done               |
-| 2     | CSV/PDF import (all institutions), transactions, categorization                                                 | next                  |
+| 2     | CSV/PDF import (all institutions), transactions, categorization                                                 | ✅ done               |
 | 3     | Dashboard, budgets, monthly report                                                                              |                       |
 | 4     | Rogers Gmail alert ingestion                                                                                    | needs Setup step 4    |
 | 5     | Plaid                                                                                                           | needs Setup steps 0–4 |
@@ -44,6 +44,24 @@ src/lib/integrations/      Connection tests: Plaid, SnapTrade, Claude, Gmail, Ba
 src/middleware.ts          Per-request CSP nonce, auth gate
 public/sw.js               Service worker: offline cache of last-synced data
 ```
+
+### Import & categorization (Stage 2)
+
+- **Import** (`/import`): CSV auto-detection for Wealthsimple (cash + credit card), TD, CIBC,
+  Scotiabank (current + legacy), PC Financial, Rogers, Questrade, IBKR (activity statement + Flex),
+  plus a header-guessing fallback; PDF statements via text extraction with a row-by-row preview.
+  Files are parsed in memory and never stored; parsed preview rows are deleted on commit.
+- **Dedupe** on (account, date, amount, normalized merchant) with multiset semantics (two
+  identical coffees on the same day are both kept) against rows from every source; re-importing
+  a file is idempotent.
+- **Transfers**: card payments and moves between your own accounts (including joint) are paired
+  and excluded from spending; one-sided legs are flagged until the other side arrives.
+- **Categorization**: your corrections (rules) → built-in Canadian merchant rules
+  (`config/category-rules.ts`) → statement hints → Claude fallback (merchant names only,
+  cached, monthly cap) → review queue for anything below 70% confidence. Rules learned from a
+  private account are private to their creator.
+- **Transactions**: search (merchant, statement text, notes), filters, review queue, splits,
+  notes, comments, transfer toggle, and per-field history with who changed what.
 
 ### Privacy model
 

@@ -6,6 +6,12 @@ export const metadata = { title: "Settings" };
 
 const LINKS = [
   { href: "/settings/setup", title: "Setup", desc: "Step-by-step setup with connection tests" },
+  { href: "/import", title: "Import", desc: "CSV/PDF statements and 12-month history backfill" },
+  {
+    href: "/settings/categories",
+    title: "Categories & rules",
+    desc: "Edit categories, learned rules, Claude usage",
+  },
   { href: "/settings/security", title: "Security", desc: "2-factor, passkeys / Face ID, sign out" },
   { href: "/settings/household", title: "Household", desc: "Members, invites, joint split" },
   {
